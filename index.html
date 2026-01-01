@@ -24,8 +24,8 @@ body {
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
-  touch-action: none;
-  user-select: none; /* 禁止长按选中文字 */
+  touch-action: none; /* 禁止默认触摸动作，关键 */
+  user-select: none;
   -webkit-user-select: none;
 }
 
@@ -50,6 +50,7 @@ h1 { margin: 0 0 10px; font-size: 24px; font-weight: 600; }
 button.start-btn {
   border: none; background: var(--green); color: #fff; padding: 12px 32px;
   font-size: 16px; font-weight: bold; border-radius: 999px; width: 100%;
+  cursor: pointer;
 }
 
 /* 主界面 */
@@ -63,20 +64,22 @@ header {
 .header-left { display: flex; flex-direction: column; gap: 8px; }
 .header-right { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
 
-input[type="file"] { font-size: 12px; width: 160px; }
+input[type="file"] { font-size: 12px; width: 160px; cursor: pointer; }
 .inputs-row { display: flex; gap: 5px; align-items: center; font-size: 13px; }
 input[type="number"] { border: 1px solid #ddd; border-radius: 4px; padding: 4px; width: 50px; text-align: center; }
 
 .color-picker { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; width: 170px; }
 .color {
   width: 24px; height: 24px; border-radius: 50%; border: 2px solid #eee;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s; position: relative;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s; position: relative; cursor: pointer;
 }
 .color.active { border-color: #555; transform: scale(1.15); box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 2; }
 .eraser { background: #fff; border: 2px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 12px; }
 .eraser::after { content: "╳"; color: #999; }
 
-#canvas-container { flex: 1; position: relative; overflow: hidden; background: #e8e8e8; }
+#canvas-container { flex: 1; position: relative; overflow: hidden; background: #e8e8e8; cursor: grab; }
+#canvas-container.drawing { cursor: crosshair; }
+#canvas-container:active { cursor: grabbing; }
 canvas { display: block; image-rendering: pixelated; }
 
 /* 底部功能区 */
@@ -88,7 +91,7 @@ canvas { display: block; image-rendering: pixelated; }
     pointer-events: auto; background: #fff; padding: 10px 20px; border-radius: 50px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.15); font-weight: bold; color: #555;
     border: 1px solid #eee; display: flex; align-items: center; gap: 8px; font-size: 14px;
-    transition: all 0.2s; min-width: 140px; justify-content: center;
+    transition: all 0.2s; min-width: 140px; justify-content: center; cursor: pointer;
 }
 .control-btn.active { background: #333; color: #fff; }
 .control-btn.magic { color: var(--blue); border-color: var(--blue); background: #f0f8ff; }
@@ -126,7 +129,7 @@ canvas { display: block; image-rendering: pixelated; }
 }
 #toast.show { opacity: 1; }
 
-/* 极简微调面板 */
+/* 微调面板 */
 #align-panel {
     position: fixed; 
     bottom: calc(85px + env(safe-area-inset-bottom)); 
@@ -142,7 +145,7 @@ canvas { display: block; image-rendering: pixelated; }
     background: #fff; border: 1px solid #ddd; border-radius: 8px; width: 40px; height: 32px;
     display: flex; align-items: center; justify-content: center; font-size: 16px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer;
-    touch-action: none; /* 关键：防止长按触发浏览器菜单 */
+    touch-action: none; 
 }
 .adjust-btn:active { background: #eee; transform: scale(0.95); }
 .move-pad { display: flex; gap: 5px; justify-content: center; margin-bottom: 5px; }
@@ -320,7 +323,6 @@ function finishCalibration(p1, p2) {
     const widthSpan = p2.x - p1.x;
     const heightSpan = p2.y - p1.y;
     
-    // 保守计算法：取较小值，保证正方形不溢出
     const sizeByWidth = widthSpan / cols;
     const sizeByHeight = heightSpan / rows;
     const cellSize = Math.min(sizeByWidth, sizeByHeight);
@@ -338,19 +340,11 @@ function finishCalibration(p1, p2) {
     draw(); autoSave();
 }
 
-// 长按逻辑处理
 function startAdjust(type, val) {
-    // 立即触发一次
     adjustGrid(type, val);
-    
-    // 清除可能存在的旧定时器
     stopAdjust();
-
-    // 延迟300毫秒后开始连发
     adjustTimer = setTimeout(() => {
-        adjustInterval = setInterval(() => {
-            adjustGrid(type, val);
-        }, 50); // 每50毫秒触发一次，速度很快
+        adjustInterval = setInterval(() => { adjustGrid(type, val); }, 50);
     }, 300);
 }
 
@@ -366,9 +360,7 @@ function adjustGrid(type, val) {
     if (type === 'x') gridParams.x += val;
     if (type === 'y') gridParams.y += val;
     if (type === 'size') gridParams.cellSize += val; 
-    draw(); 
-    // 连发时不频繁存storage，性能更好，松手后可再存一次，但这里简化直接存也没问题
-    autoSave();
+    draw(); autoSave();
 }
 
 function toggleMode() {
@@ -502,24 +494,39 @@ function getGridPos(clientX, clientY) {
 
 function getDist(p1, p2) { return Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY); }
 
-container.addEventListener('touchstart', e => {
-    if (e.touches.length === 2) {
-        isDragging = true; 
-        initialPinchDist = getDist(e.touches[0], e.touches[1]); 
+// 统一的指针事件处理 (同时支持 Touch 和 Mouse)
+function handlePointerDown(e) {
+    // 如果是触摸，需要判断手指数量
+    if (e.type === 'touchstart' && e.touches.length === 2) {
+        isDragging = true;
+        initialPinchDist = getDist(e.touches[0], e.touches[1]);
         initialScale = view.scale;
-        lastX = (e.touches[0].clientX + e.touches[1].clientX) / 2; 
+        lastX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
         lastY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
         this.pinchCenterWorld = getImgPos(lastX, lastY);
-    } else if (e.touches.length === 1) {
-        const touch = e.touches[0];
-        if (!isCalibrating && isDrawMode) handleDraw(touch);
-        else { isDragging = true; lastX = touch.clientX; lastY = touch.clientY; }
+        return;
     }
-}, {passive: false});
+    
+    // 单指或鼠标
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-container.addEventListener('touchmove', e => {
+    if (!isCalibrating && isDrawMode) {
+        // 只有涂色模式下才处理绘制
+        handleDraw(clientX, clientY);
+    } else {
+        // 浏览模式或校准中，都是拖动
+        isDragging = true;
+        lastX = clientX;
+        lastY = clientY;
+    }
+}
+
+function handlePointerMove(e) {
     e.preventDefault();
-    if (e.touches.length === 2 && isDragging) {
+    
+    // 双指缩放
+    if (e.type === 'touchmove' && e.touches.length === 2 && isDragging) {
         const dist = getDist(e.touches[0], e.touches[1]);
         const newScale = Math.max(0.1, Math.min(initialScale * (dist / initialPinchDist), 20));
         const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
@@ -528,24 +535,47 @@ container.addEventListener('touchmove', e => {
         view.x = cx - this.pinchCenterWorld.x * newScale;
         view.y = cy - this.pinchCenterWorld.y * newScale;
         draw();
-    } else if (e.touches.length === 1) {
-        if (isDragging) {
-            view.x += e.touches[0].clientX - lastX; view.y += e.touches[0].clientY - lastY;
-            lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; draw();
-        } else if (isDrawMode && !isCalibrating) {
-            handleDraw(e.touches[0]);
-        }
+        return;
     }
-}, {passive: false});
 
-container.addEventListener('touchend', () => isDragging = false);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-function handleDraw(touch) {
-    const pos = getGridPos(touch.clientX, touch.clientY);
+    if (isDragging) {
+        // 拖动逻辑
+        view.x += clientX - lastX;
+        view.y += clientY - lastY;
+        lastX = clientX;
+        lastY = clientY;
+        draw();
+    } else if (isDrawMode && !isCalibrating && (e.buttons === 1 || e.type === 'touchmove')) {
+        // 鼠标按住拖动涂色，或手指滑动涂色
+        handleDraw(clientX, clientY);
+    }
+}
+
+function handlePointerUp() {
+    isDragging = false;
+}
+
+// 绑定事件 (兼容 iPad Desktop Mode 和 PC)
+container.addEventListener('touchstart', handlePointerDown, {passive: false});
+container.addEventListener('mousedown', handlePointerDown);
+
+container.addEventListener('touchmove', handlePointerMove, {passive: false});
+container.addEventListener('mousemove', handlePointerMove);
+
+container.addEventListener('touchend', handlePointerUp);
+container.addEventListener('mouseup', handlePointerUp);
+container.addEventListener('mouseleave', handlePointerUp);
+
+function handleDraw(cx, cy) {
+    const pos = getGridPos(cx, cy);
     if (!pos) return;
     if (isEraser) { marks[pos.r][pos.c] = null; } else { marks[pos.r][pos.c] = currentColor; }
     draw(); autoSave();
 }
+
 function showToast(msg) { toast.innerText = msg; toast.classList.add("show"); setTimeout(() => { toast.classList.remove("show"); }, 3000); }
 
 resize();
