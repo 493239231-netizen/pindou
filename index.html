@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<title>飞天土豆拼豆日记</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=no, viewport-fit=cover">
+
+<style>
+:root {
+  --bg: #f6f5ef;
+  --card: #ffffff;
+  --green: #7fb685;
+  --blue: #54a0ff;
+  --red: #ff4757;
+  --text: #4a4a4a;
+  --panel-bg: rgba(255, 255, 255, 0.98);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none; /* 禁止长按选中文字 */
+  -webkit-user-select: none;
+}
+
+.screen { display: none; height: 100vh; width: 100vw; position: relative; }
+.screen.active { display: flex; }
+
+/* 封面 */
+#cover { align-items: center; justify-content: center; flex-direction: column; text-align: center; z-index: 200; }
+.card {
+  background: var(--card); padding: 40px 30px; border-radius: 20px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.08); max-width: 90%; width: 340px;
+}
+h1 { margin: 0 0 10px; font-size: 24px; font-weight: 600; }
+
+.quote-box {
+    background: #fff8e1; border: 1px solid #ffe0b2; padding: 20px; border-radius: 12px;
+    font-size: 15px; color: #f57c00; line-height: 1.6; text-align: left; margin-bottom: 30px;
+    font-weight: 500; position: relative;
+}
+.quote-box::before { content: "❝"; font-size: 40px; position: absolute; top: -10px; left: 10px; opacity: 0.2; }
+
+button.start-btn {
+  border: none; background: var(--green); color: #fff; padding: 12px 32px;
+  font-size: 16px; font-weight: bold; border-radius: 999px; width: 100%;
+}
+
+/* 主界面 */
+#app { flex-direction: column; }
+
+header {
+  padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); 
+  background: #fff; display: flex; gap: 10px; align-items: center; 
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05); z-index: 100; justify-content: space-between;
+}
+.header-left { display: flex; flex-direction: column; gap: 8px; }
+.header-right { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+
+input[type="file"] { font-size: 12px; width: 160px; }
+.inputs-row { display: flex; gap: 5px; align-items: center; font-size: 13px; }
+input[type="number"] { border: 1px solid #ddd; border-radius: 4px; padding: 4px; width: 50px; text-align: center; }
+
+.color-picker { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; width: 170px; }
+.color {
+  width: 24px; height: 24px; border-radius: 50%; border: 2px solid #eee;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s; position: relative;
+}
+.color.active { border-color: #555; transform: scale(1.15); box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 2; }
+.eraser { background: #fff; border: 2px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.eraser::after { content: "╳"; color: #999; }
+
+#canvas-container { flex: 1; position: relative; overflow: hidden; background: #e8e8e8; }
+canvas { display: block; image-rendering: pixelated; }
+
+/* 底部功能区 */
+.bottom-controls {
+    position: fixed; bottom: calc(25px + env(safe-area-inset-bottom)); left: 0; width: 100%;
+    display: flex; justify-content: center; gap: 15px; pointer-events: none; z-index: 90;
+}
+.control-btn {
+    pointer-events: auto; background: #fff; padding: 10px 20px; border-radius: 50px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15); font-weight: bold; color: #555;
+    border: 1px solid #eee; display: flex; align-items: center; gap: 8px; font-size: 14px;
+    transition: all 0.2s; min-width: 140px; justify-content: center;
+}
+.control-btn.active { background: #333; color: #fff; }
+.control-btn.magic { color: var(--blue); border-color: var(--blue); background: #f0f8ff; }
+.control-btn.step1 { background: #ff4757; color: white; border-color: #ff4757; animation: pulse 1s infinite; }
+.control-btn.step2 { background: #2ed573; color: white; border-color: #2ed573; }
+
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+/* 十字准心 */
+#crosshair {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 240px; height: 240px; pointer-events: none; z-index: 85;
+    display: none; justify-content: center; align-items: center;
+}
+#crosshair::before {
+    content: ''; position: absolute; width: 40px; height: 40px;
+    border-top: 2px solid #ff4757; border-left: 2px solid #ff4757; 
+    box-shadow: -2px -2px 0 rgba(255,255,255,0.5); 
+    top: 50%; left: 50%; transition: all 0.3s;
+}
+#crosshair::after {
+    content: '+'; color: #ff4757; font-size: 20px; font-weight: 100; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -54%);
+}
+#crosshair.step2::before {
+    border-top: none; border-left: none; border-bottom: 2px solid #2ed573; border-right: 2px solid #2ed573;
+    transform: translate(-100%, -100%);
+}
+#crosshair.step2::after { color: #2ed573; }
+
+#toast {
+    position: fixed; top: 120px; left: 50%; transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8); padding: 12px 24px; border-radius: 50px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2); font-size: 15px; font-weight: 500; color: #fff;
+    opacity: 0; pointer-events: none; transition: all 0.4s; z-index: 200; white-space: nowrap;
+}
+#toast.show { opacity: 1; }
+
+/* 极简微调面板 */
+#align-panel {
+    position: fixed; 
+    bottom: calc(85px + env(safe-area-inset-bottom)); 
+    left: 50%; transform: translateX(-50%);
+    background: var(--panel-bg); padding: 12px 20px; border-radius: 16px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.2); backdrop-filter: blur(10px);
+    display: none; flex-direction: column; gap: 8px; z-index: 95; width: max-content; 
+}
+#align-panel.show { display: flex; }
+.adjust-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.adjust-label { font-size: 12px; color: #666; font-weight: bold; width: 40px; }
+.adjust-btn {
+    background: #fff; border: 1px solid #ddd; border-radius: 8px; width: 40px; height: 32px;
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer;
+    touch-action: none; /* 关键：防止长按触发浏览器菜单 */
+}
+.adjust-btn:active { background: #eee; transform: scale(0.95); }
+.move-pad { display: flex; gap: 5px; justify-content: center; margin-bottom: 5px; }
+</style>
+</head>
+
+<body>
+
+<div id="toast">加油！</div>
+
+<div id="cover" class="screen active">
+  <div class="card">
+    <h1>🍃 飞天土豆拼豆日记 🍃</h1>
+    <div class="quote-box">
+        记住，世上只有两种豆：一种在板子上，一种在地板上。<br>
+        而您，是征服了这两种豆的勇士。
+    </div>
+    <button class="start-btn" onclick="enterApp()">开始记录</button>
+  </div>
+</div>
+
+<div id="app" class="screen">
+  <header>
+    <div class="header-left">
+        <input type="file" id="upload" accept="image/*">
+        <div class="inputs-row" style="margin-top:8px">
+            行 <input type="number" id="rows" value="64">
+            列 <input type="number" id="cols" value="64">
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="color-picker">
+            <div class="color eraser" onclick="setEraser(this)" title="橡皮擦"></div>
+            <div class="color active" style="background:rgba(120,120,120,0.7)" onclick="setColor('rgba(120,120,120,0.7)', this)"></div>
+            <div class="color" style="background:rgba(235,87,87,0.7)" onclick="setColor('rgba(235,87,87,0.7)', this)"></div>
+            <div class="color" style="background:rgba(242,153,74,0.7)" onclick="setColor('rgba(242,153,74,0.7)', this)"></div>
+            <div class="color" style="background:rgba(242,201,76,0.7)" onclick="setColor('rgba(242,201,76,0.7)', this)"></div>
+            <div class="color" style="background:rgba(39,174,96,0.7)" onclick="setColor('rgba(39,174,96,0.7)', this)"></div>
+            <div class="color" style="background:rgba(47,128,237,0.7)" onclick="setColor('rgba(47,128,237,0.7)', this)"></div>
+            <div class="color" style="background:rgba(155,81,224,0.7)" onclick="setColor('rgba(155,81,224,0.7)', this)"></div>
+            <div class="color" style="background:rgba(0,0,0,0.7)" onclick="setColor('rgba(0,0,0,0.7)', this)"></div>
+        </div>
+    </div>
+  </header>
+
+  <div id="canvas-container">
+      <canvas id="canvas"></canvas>
+      <div id="crosshair"></div>
+  </div>
+
+  <div id="align-panel">
+      <div class="move-pad">
+          <button class="adjust-btn" onpointerdown="startAdjust('y', -1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">⬆️</button>
+          <button class="adjust-btn" onpointerdown="startAdjust('y', 1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">⬇️</button>
+          <button class="adjust-btn" onpointerdown="startAdjust('x', -1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">⬅️</button>
+          <button class="adjust-btn" onpointerdown="startAdjust('x', 1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">➡️</button>
+      </div>
+      <div class="adjust-row">
+          <span class="adjust-label">大小</span>
+          <button class="adjust-btn" onpointerdown="startAdjust('size', -0.5)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">➖</button>
+          <button class="adjust-btn" onpointerdown="startAdjust('size', 0.5)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">➕</button>
+      </div>
+  </div>
+
+  <div class="bottom-controls">
+      <div class="control-btn magic" id="calib-btn" onclick="handleCalibClick()">
+          🪄 智能对齐
+      </div>
+      <div class="control-btn" id="mode-btn" onclick="toggleMode()">
+          🔍 浏览模式
+      </div>
+  </div>
+</div>
+
+<script>
+const cover = document.getElementById("cover");
+const app = document.getElementById("app");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const toast = document.getElementById("toast");
+const container = document.getElementById("canvas-container");
+const crosshair = document.getElementById("crosshair");
+const calibBtn = document.getElementById("calib-btn");
+const modeBtn = document.getElementById("mode-btn");
+const alignPanel = document.getElementById("align-panel");
+
+let img = new Image();
+let rows = 64;
+let cols = 64;
+let marks = []; 
+let currentColor = "rgba(120,120,120,0.7)";
+let isEraser = false; 
+let isDrawMode = false; 
+let view = { x: 0, y: 0, scale: 1 };
+let isDragging = false, lastX = 0, lastY = 0;
+let initialPinchDist = 0, initialScale = 1;
+
+// 核心参数：回归单一边长，强制正方形
+let gridParams = { x: 0, y: 0, cellSize: 0 }; 
+
+let isCalibrating = false;
+let calibStep = 0;
+let p1 = null; 
+
+// 长按连发定时器
+let adjustTimer = null;
+let adjustInterval = null;
+
+function enterApp() { 
+    cover.classList.remove("active"); 
+    app.classList.add("active"); 
+    tryLoadAutoSave();
+    resize(); 
+}
+
+function initMarks() { 
+    if(marks.length !== rows || (marks[0] && marks[0].length !== cols)) {
+        marks = Array.from({length: rows}, () => Array.from({length: cols}, () => null)); 
+    }
+}
+
+function autoSave() {
+    if(!img.src) return;
+    const data = { rows, cols, gridParams, marks, imgSrc: img.src };
+    try { localStorage.setItem('tudou_diary_autosave', JSON.stringify(data)); } catch (e) {}
+}
+
+function tryLoadAutoSave() {
+    const saved = localStorage.getItem('tudou_diary_autosave');
+    if (saved) {
+        try {
+            const data = JSON.parse(saved);
+            rows = data.rows || 64; cols = data.cols || 64;
+            document.getElementById('rows').value = rows;
+            document.getElementById('cols').value = cols;
+            gridParams = data.gridParams;
+            marks = data.marks;
+            img.onload = () => { draw(); showToast("✨ 进度已恢复"); };
+            img.src = data.imgSrc;
+        } catch(e) {}
+    } else { initMarks(); }
+}
+
+function handleCalibClick() {
+    if (!isCalibrating) startCalibration(); else confirmPoint();
+}
+
+function startCalibration() {
+    if (!img.src) { showToast("请先上传图片"); return; }
+    isCalibrating = true; calibStep = 1; p1 = null;
+    crosshair.style.display = 'flex'; crosshair.classList.remove('step2');
+    calibBtn.innerText = "🎯 锁定左上角"; calibBtn.classList.add("step1");
+    alignPanel.classList.remove("show");
+    
+    if(isDrawMode) toggleMode(); 
+    showToast("第1步：锁定【左上角】顶点");
+}
+
+function confirmPoint() {
+    const cx = container.clientWidth / 2;
+    const cy = container.clientHeight / 2;
+    const p = getImgPos(cx, cy); 
+    if (calibStep === 1) {
+        p1 = p; calibStep = 2;
+        calibBtn.innerText = "🎯 锁定右下角";
+        calibBtn.classList.remove("step1"); calibBtn.classList.add("step2");
+        crosshair.classList.add('step2');
+        showToast("第2步：锁定【右下角】顶点");
+    } else if (calibStep === 2) {
+        finishCalibration(p1, p);
+    }
+}
+
+function finishCalibration(p1, p2) {
+    const widthSpan = p2.x - p1.x;
+    const heightSpan = p2.y - p1.y;
+    
+    // 保守计算法：取较小值，保证正方形不溢出
+    const sizeByWidth = widthSpan / cols;
+    const sizeByHeight = heightSpan / rows;
+    const cellSize = Math.min(sizeByWidth, sizeByHeight);
+    
+    gridParams = { x: p1.x, y: p1.y, cellSize: cellSize };
+    
+    isCalibrating = false; calibStep = 0;
+    crosshair.style.display = 'none';
+    calibBtn.innerText = "🪄 智能对齐";
+    calibBtn.classList.remove("step1", "step2");
+    
+    alignPanel.classList.add("show");
+    
+    showToast("✅ 已对齐！按住按钮可快速微调");
+    draw(); autoSave();
+}
+
+// 长按逻辑处理
+function startAdjust(type, val) {
+    // 立即触发一次
+    adjustGrid(type, val);
+    
+    // 清除可能存在的旧定时器
+    stopAdjust();
+
+    // 延迟300毫秒后开始连发
+    adjustTimer = setTimeout(() => {
+        adjustInterval = setInterval(() => {
+            adjustGrid(type, val);
+        }, 50); // 每50毫秒触发一次，速度很快
+    }, 300);
+}
+
+function stopAdjust() {
+    clearTimeout(adjustTimer);
+    clearInterval(adjustInterval);
+    adjustTimer = null;
+    adjustInterval = null;
+}
+
+function adjustGrid(type, val) {
+    if (!img.src) return;
+    if (type === 'x') gridParams.x += val;
+    if (type === 'y') gridParams.y += val;
+    if (type === 'size') gridParams.cellSize += val; 
+    draw(); 
+    // 连发时不频繁存storage，性能更好，松手后可再存一次，但这里简化直接存也没问题
+    autoSave();
+}
+
+function toggleMode() {
+    if (isCalibrating) {
+        isCalibrating = false; calibStep = 0; crosshair.style.display = 'none';
+        alignPanel.classList.remove("show");
+        calibBtn.innerText = "🪄 智能对齐"; calibBtn.classList.remove("step1", "step2");
+        showToast("已取消对齐"); return;
+    }
+    isDrawMode = !isDrawMode;
+    if (isDrawMode) {
+        modeBtn.classList.add("active"); modeBtn.innerText = "✏️ 涂色模式";
+        container.classList.add("drawing"); showToast("✏️ 涂色模式");
+    } else {
+        modeBtn.classList.remove("active"); modeBtn.innerText = "🔍 浏览模式";
+        container.classList.remove("drawing"); showToast("🔍 浏览模式");
+    }
+}
+
+document.getElementById("upload").onchange = e => {
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        img.onload = () => {
+            initMarks();
+            const minSide = Math.min(img.width / cols, img.height / rows);
+            gridParams = { x: 0, y: 0, cellSize: minSide };
+            resetView(); draw(); autoSave();
+        };
+        img.src = reader.result;
+    };
+    reader.readAsDataURL(file); e.target.value = '';
+};
+
+document.getElementById("rows").onchange = e => { rows = +e.target.value; initMarks(); draw(); autoSave(); };
+document.getElementById("cols").onchange = e => { cols = +e.target.value; initMarks(); draw(); autoSave(); };
+
+function setColor(c, el) {
+    currentColor = c; isEraser = false;
+    document.querySelectorAll('.color').forEach(d => d.classList.remove('active'));
+    el.classList.add('active');
+}
+function setEraser(el) {
+    isEraser = true;
+    document.querySelectorAll('.color').forEach(d => d.classList.remove('active'));
+    el.classList.add('active');
+    showToast("⬜ 已切换橡皮擦");
+}
+
+function resize() {
+    if(!app.classList.contains('active')) return;
+    const rect = container.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr; canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + "px"; canvas.style.height = rect.height + "px";
+    ctx.imageSmoothingEnabled = false; 
+    draw();
+}
+window.onresize = resize;
+
+function resetView() {
+    if (!img.src) return;
+    const rect = container.getBoundingClientRect();
+    const scaleW = rect.width / img.width; const scaleH = rect.height / img.height;
+    view.scale = Math.min(scaleW, scaleH) * 0.9;
+    view.x = (rect.width - img.width * view.scale) / 2;
+    view.y = (rect.height - img.height * view.scale) / 2;
+}
+
+function draw() {
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!img.src) {
+        ctx.scale(dpr, dpr); ctx.fillStyle = "#999"; ctx.font = "16px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText("请上传拼豆图纸", container.clientWidth/2, container.clientHeight/2); return;
+    }
+    ctx.setTransform(view.scale * dpr, 0, 0, view.scale * dpr, view.x * dpr, view.y * dpr);
+    ctx.drawImage(img, 0, 0);
+
+    const cellSize = gridParams.cellSize;
+    const totalW = cellSize * cols;
+    const totalH = cellSize * rows;
+    
+    if (!isCalibrating) {
+        ctx.lineWidth = 1 / view.scale; 
+        ctx.strokeStyle = "rgba(0,0,0,0.2)";
+        ctx.beginPath();
+        for(let r=0; r<=rows; r++){
+            const y = gridParams.y + r * cellSize;
+            ctx.moveTo(gridParams.x, y); ctx.lineTo(gridParams.x + totalW, y);
+        }
+        for(let c=0; c<=cols; c++){
+            const x = gridParams.x + c * cellSize;
+            ctx.moveTo(x, gridParams.y); ctx.lineTo(x, gridParams.y + totalH);
+        }
+        ctx.stroke();
+
+        for(let r=0; r<rows; r++){
+            for(let c=0; c<cols; c++){
+                if(marks[r][c]){
+                    const x = gridParams.x + c * cellSize;
+                    const y = gridParams.y + r * cellSize;
+                    ctx.fillStyle = marks[r][c];
+                    ctx.fillRect(x, y, cellSize, cellSize);
+                }
+            }
+        }
+    }
+}
+
+function getImgPos(clientX, clientY) {
+    const rect = container.getBoundingClientRect();
+    const x = clientX - rect.left; 
+    const y = clientY - rect.top;
+    const imgX = (x - view.x) / view.scale;
+    const imgY = (y - view.y) / view.scale;
+    return { x: imgX, y: imgY };
+}
+
+function getGridPos(clientX, clientY) {
+    const p = getImgPos(clientX, clientY);
+    const gridX = p.x - gridParams.x; 
+    const gridY = p.y - gridParams.y;
+    if(gridX < 0 || gridY < 0) return null;
+    const cellSize = gridParams.cellSize;
+    const c = Math.floor(gridX / cellSize); 
+    const r = Math.floor(gridY / cellSize);
+    if(r >= 0 && r < rows && c >= 0 && c < cols) return {r, c};
+    return null;
+}
+
+function getDist(p1, p2) { return Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY); }
+
+container.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+        isDragging = true; 
+        initialPinchDist = getDist(e.touches[0], e.touches[1]); 
+        initialScale = view.scale;
+        lastX = (e.touches[0].clientX + e.touches[1].clientX) / 2; 
+        lastY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        this.pinchCenterWorld = getImgPos(lastX, lastY);
+    } else if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        if (!isCalibrating && isDrawMode) handleDraw(touch);
+        else { isDragging = true; lastX = touch.clientX; lastY = touch.clientY; }
+    }
+}, {passive: false});
+
+container.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2 && isDragging) {
+        const dist = getDist(e.touches[0], e.touches[1]);
+        const newScale = Math.max(0.1, Math.min(initialScale * (dist / initialPinchDist), 20));
+        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        view.scale = newScale;
+        view.x = cx - this.pinchCenterWorld.x * newScale;
+        view.y = cy - this.pinchCenterWorld.y * newScale;
+        draw();
+    } else if (e.touches.length === 1) {
+        if (isDragging) {
+            view.x += e.touches[0].clientX - lastX; view.y += e.touches[0].clientY - lastY;
+            lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; draw();
+        } else if (isDrawMode && !isCalibrating) {
+            handleDraw(e.touches[0]);
+        }
+    }
+}, {passive: false});
+
+container.addEventListener('touchend', () => isDragging = false);
+
+function handleDraw(touch) {
+    const pos = getGridPos(touch.clientX, touch.clientY);
+    if (!pos) return;
+    if (isEraser) { marks[pos.r][pos.c] = null; } else { marks[pos.r][pos.c] = currentColor; }
+    draw(); autoSave();
+}
+function showToast(msg) { toast.innerText = msg; toast.classList.add("show"); setTimeout(() => { toast.classList.remove("show"); }, 3000); }
+
+resize();
+</script>
+</body>
+</html>
