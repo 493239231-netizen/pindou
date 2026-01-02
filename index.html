@@ -13,7 +13,7 @@
   --blue: #54a0ff;
   --red: #ff4757;
   --text: #4a4a4a;
-  --panel-bg: rgba(255, 255, 255, 0.98);
+  --panel-bg: rgba(255, 255, 255, 0.95);
 }
 
 * { box-sizing: border-box; }
@@ -24,7 +24,7 @@ body {
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
-  touch-action: none; /* 禁止默认触摸动作，关键 */
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -129,16 +129,43 @@ canvas { display: block; image-rendering: pixelated; }
 }
 #toast.show { opacity: 1; }
 
-/* 微调面板 */
+/* 可收缩微调面板 */
 #align-panel {
     position: fixed; 
     bottom: calc(85px + env(safe-area-inset-bottom)); 
     left: 50%; transform: translateX(-50%);
-    background: var(--panel-bg); padding: 12px 20px; border-radius: 16px;
+    background: var(--panel-bg); 
+    border-radius: 16px;
     box-shadow: 0 5px 20px rgba(0,0,0,0.2); backdrop-filter: blur(10px);
-    display: none; flex-direction: column; gap: 8px; z-index: 95; width: max-content; 
+    display: none; flex-direction: column; z-index: 95; width: max-content; 
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    overflow: hidden;
 }
 #align-panel.show { display: flex; }
+
+/* 面板头部（收起按钮） */
+.panel-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; background: #f5f5f5; border-bottom: 1px solid #eee;
+}
+.panel-title { font-size: 12px; font-weight: bold; color: #666; }
+.toggle-icon { font-size: 14px; color: #333; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+.toggle-icon:hover { background: #ddd; }
+
+/* 面板内容 */
+.panel-content { padding: 12px 20px; display: flex; flex-direction: column; gap: 8px; }
+
+/* 最小化状态 */
+#align-panel.minimized {
+    width: 44px; height: 44px; border-radius: 50%; padding: 0;
+    align-items: center; justify-content: center; background: #fff;
+}
+#align-panel.minimized .panel-header { display: none; }
+#align-panel.minimized .panel-content { display: none; }
+#align-panel.minimized::after {
+    content: "🛠️"; font-size: 20px;
+}
+
 .adjust-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
 .adjust-label { font-size: 12px; color: #666; font-weight: bold; width: 40px; }
 .adjust-btn {
@@ -196,17 +223,23 @@ canvas { display: block; image-rendering: pixelated; }
       <div id="crosshair"></div>
   </div>
 
-  <div id="align-panel">
-      <div class="move-pad">
-          <button class="adjust-btn" onpointerdown="startAdjust('y', -1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">⬆️</button>
-          <button class="adjust-btn" onpointerdown="startAdjust('y', 1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">⬇️</button>
-          <button class="adjust-btn" onpointerdown="startAdjust('x', -1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">⬅️</button>
-          <button class="adjust-btn" onpointerdown="startAdjust('x', 1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">➡️</button>
+  <div id="align-panel" onclick="expandPanel()">
+      <div class="panel-header" onclick="collapsePanel(event)">
+          <span class="panel-title">网格微调</span>
+          <span class="toggle-icon">🔽 收起</span>
       </div>
-      <div class="adjust-row">
-          <span class="adjust-label">大小</span>
-          <button class="adjust-btn" onpointerdown="startAdjust('size', -0.5)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">➖</button>
-          <button class="adjust-btn" onpointerdown="startAdjust('size', 0.5)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">➕</button>
+      <div class="panel-content">
+          <div class="move-pad">
+              <button class="adjust-btn" onpointerdown="startAdjust('y', -1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">⬆️</button>
+              <button class="adjust-btn" onpointerdown="startAdjust('y', 1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">⬇️</button>
+              <button class="adjust-btn" onpointerdown="startAdjust('x', -1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">⬅️</button>
+              <button class="adjust-btn" onpointerdown="startAdjust('x', 1)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">➡️</button>
+          </div>
+          <div class="adjust-row">
+              <span class="adjust-label">大小</span>
+              <button class="adjust-btn" onpointerdown="startAdjust('size', -0.5)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">➖</button>
+              <button class="adjust-btn" onpointerdown="startAdjust('size', 0.5)" onpointerup="stopAdjust()" onpointerleave="stopAdjust()">➕</button>
+          </div>
       </div>
   </div>
 
@@ -243,14 +276,12 @@ let view = { x: 0, y: 0, scale: 1 };
 let isDragging = false, lastX = 0, lastY = 0;
 let initialPinchDist = 0, initialScale = 1;
 
-// 核心参数：回归单一边长，强制正方形
 let gridParams = { x: 0, y: 0, cellSize: 0 }; 
 
 let isCalibrating = false;
 let calibStep = 0;
 let p1 = null; 
 
-// 长按连发定时器
 let adjustTimer = null;
 let adjustInterval = null;
 
@@ -298,7 +329,9 @@ function startCalibration() {
     isCalibrating = true; calibStep = 1; p1 = null;
     crosshair.style.display = 'flex'; crosshair.classList.remove('step2');
     calibBtn.innerText = "🎯 锁定左上角"; calibBtn.classList.add("step1");
+    // 对齐时先隐藏微调面板
     alignPanel.classList.remove("show");
+    alignPanel.classList.remove("minimized");
     
     if(isDrawMode) toggleMode(); 
     showToast("第1步：锁定【左上角】顶点");
@@ -336,8 +369,20 @@ function finishCalibration(p1, p2) {
     
     alignPanel.classList.add("show");
     
-    showToast("✅ 已对齐！按住按钮可快速微调");
+    showToast("✅ 已对齐！可使用微调面板");
     draw(); autoSave();
+}
+
+// 面板收缩逻辑
+function collapsePanel(e) {
+    e.stopPropagation(); // 防止触发 expand
+    alignPanel.classList.add("minimized");
+}
+
+function expandPanel() {
+    if (alignPanel.classList.contains("minimized")) {
+        alignPanel.classList.remove("minimized");
+    }
 }
 
 function startAdjust(type, val) {
@@ -494,9 +539,7 @@ function getGridPos(clientX, clientY) {
 
 function getDist(p1, p2) { return Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY); }
 
-// 统一的指针事件处理 (同时支持 Touch 和 Mouse)
 function handlePointerDown(e) {
-    // 如果是触摸，需要判断手指数量
     if (e.type === 'touchstart' && e.touches.length === 2) {
         isDragging = true;
         initialPinchDist = getDist(e.touches[0], e.touches[1]);
@@ -506,26 +549,18 @@ function handlePointerDown(e) {
         this.pinchCenterWorld = getImgPos(lastX, lastY);
         return;
     }
-    
-    // 单指或鼠标
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
     if (!isCalibrating && isDrawMode) {
-        // 只有涂色模式下才处理绘制
         handleDraw(clientX, clientY);
     } else {
-        // 浏览模式或校准中，都是拖动
-        isDragging = true;
-        lastX = clientX;
-        lastY = clientY;
+        isDragging = true; lastX = clientX; lastY = clientY;
     }
 }
 
 function handlePointerMove(e) {
     e.preventDefault();
-    
-    // 双指缩放
     if (e.type === 'touchmove' && e.touches.length === 2 && isDragging) {
         const dist = getDist(e.touches[0], e.touches[1]);
         const newScale = Math.max(0.1, Math.min(initialScale * (dist / initialPinchDist), 20));
@@ -542,29 +577,22 @@ function handlePointerMove(e) {
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
     if (isDragging) {
-        // 拖动逻辑
         view.x += clientX - lastX;
         view.y += clientY - lastY;
         lastX = clientX;
         lastY = clientY;
         draw();
     } else if (isDrawMode && !isCalibrating && (e.buttons === 1 || e.type === 'touchmove')) {
-        // 鼠标按住拖动涂色，或手指滑动涂色
         handleDraw(clientX, clientY);
     }
 }
 
-function handlePointerUp() {
-    isDragging = false;
-}
+function handlePointerUp() { isDragging = false; }
 
-// 绑定事件 (兼容 iPad Desktop Mode 和 PC)
 container.addEventListener('touchstart', handlePointerDown, {passive: false});
 container.addEventListener('mousedown', handlePointerDown);
-
 container.addEventListener('touchmove', handlePointerMove, {passive: false});
 container.addEventListener('mousemove', handlePointerMove);
-
 container.addEventListener('touchend', handlePointerUp);
 container.addEventListener('mouseup', handlePointerUp);
 container.addEventListener('mouseleave', handlePointerUp);
