@@ -143,7 +143,7 @@ canvas { display: block; image-rendering: pixelated; }
 }
 #align-panel.show { display: flex; }
 
-/* 面板头部（收起按钮） */
+/* 面板头部 */
 .panel-header {
     display: flex; justify-content: space-between; align-items: center;
     padding: 8px 12px; background: #f5f5f5; border-bottom: 1px solid #eee;
@@ -162,9 +162,7 @@ canvas { display: block; image-rendering: pixelated; }
 }
 #align-panel.minimized .panel-header { display: none; }
 #align-panel.minimized .panel-content { display: none; }
-#align-panel.minimized::after {
-    content: "🛠️"; font-size: 20px;
-}
+#align-panel.minimized::after { content: "🛠️"; font-size: 20px; }
 
 .adjust-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
 .adjust-label { font-size: 12px; color: #666; font-weight: bold; width: 40px; }
@@ -329,7 +327,6 @@ function startCalibration() {
     isCalibrating = true; calibStep = 1; p1 = null;
     crosshair.style.display = 'flex'; crosshair.classList.remove('step2');
     calibBtn.innerText = "🎯 锁定左上角"; calibBtn.classList.add("step1");
-    // 对齐时先隐藏微调面板
     alignPanel.classList.remove("show");
     alignPanel.classList.remove("minimized");
     
@@ -373,9 +370,8 @@ function finishCalibration(p1, p2) {
     draw(); autoSave();
 }
 
-// 面板收缩逻辑
 function collapsePanel(e) {
-    e.stopPropagation(); // 防止触发 expand
+    e.stopPropagation(); 
     alignPanel.classList.add("minimized");
 }
 
@@ -430,9 +426,13 @@ document.getElementById("upload").onchange = e => {
     const reader = new FileReader();
     reader.onload = () => {
         img.onload = () => {
-            initMarks();
+            // 关键修改：换图时强制重置格子数据
+            marks = Array.from({length: rows}, () => Array.from({length: cols}, () => null)); 
+            
+            // 默认全图适配
             const minSide = Math.min(img.width / cols, img.height / rows);
             gridParams = { x: 0, y: 0, cellSize: minSide };
+            
             resetView(); draw(); autoSave();
         };
         img.src = reader.result;
